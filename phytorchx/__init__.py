@@ -1,7 +1,7 @@
 from functools import wraps
 from itertools import starmap
 from operator import mul
-from typing import Iterable
+from typing import Iterable, Optional, Union, TypeVar
 
 import torch
 from more_itertools import last
@@ -18,7 +18,18 @@ def get_default_device():
     This is defined as the device on which a tensor would be allocated by default
     **at the point this function is called**.
     """
-    return torch._C._get_default_device()
+    return (
+        _.device
+        if (_ := getattr(torch, '_GLOBAL_DEVICE_CONTEXT', None)) is not None
+        else torch._C._get_default_device()
+    )
+
+
+_Size = Union[Size, Iterable[int], int]
+
+
+def sizeify(arg: Optional[_Size]) -> Size:
+    return None if arg is None else Size(arg) if isinstance(arg, Iterable) else Size((arg,))
 
 
 @wraps(torch.load, ('__annotations__',), ())
@@ -41,7 +52,7 @@ def _mid_one_unnormed(a: Tensor, dim: int) -> Tensor:
     return torch.narrow(a, dim, 0, a.shape[dim]-1) + torch.narrow(a, dim, 1, a.shape[dim]-1)
 
 
-def mid_one(a: Tensor, axis: int) -> Tensor:
+def mid_one(a: Tensor, axis: int = -1) -> Tensor:
     r"""Create a new tensor which, along the :arg:`dim`-th dimension, contains the
     average of adjacent elements of the input:
 
@@ -63,8 +74,10 @@ def mid_one(a: Tensor, axis: int) -> Tensor:
     return _mid_one_unnormed(a, axis) / 2
 
 
-def mid_many(a: Tensor, axes: Iterable[int]) -> Tensor:
+def mid_many(a: Tensor, axes: Iterable[int] = None) -> Tensor:
     r"""Perform `mid_one` along  many (not necessarily dajacent) :arg:`axes` at the same time."""
+    if axes is None:
+        axes = range(a.ndim)
     axes = [ax % a.ndim for ax in axes]
     return last(
         _a for _a in [a] for ax in axes
@@ -72,7 +85,10 @@ def mid_many(a: Tensor, axes: Iterable[int]) -> Tensor:
     ) / 2**len(axes) if axes else a
 
 
-def ravel_multi_index(indices: Iterable[Tensor], shape: Size) -> Tensor:
+_T = TypeVar('_T', bound=Tensor)
+
+
+def ravel_multi_index(indices: Iterable[_T], shape: Size) -> _T:
     """Transform a multi-dimensional index into a one-dimensional index into the ravelled tensor.
 
     Parameters

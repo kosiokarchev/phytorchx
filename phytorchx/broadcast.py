@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import torch
 from itertools import chain
-from typing import Iterable
+from typing import Iterable, Union
 
 from more_itertools import split_into, lstrip
 from torch import broadcast_shapes, Size, Tensor, cat, gather, LongTensor
 
 __all__ = (
-    'broadcast_except', 'broadcast_left', 'broadcast_gather', 'broadcast_cat',
+    'broadcast_except', 'broadcast_left',
+    'broadcast_gather', 'broadcast_multigather',
+    'broadcast_cat', 'broadcast_stack',
     'insert_dims', 'pad_dims', 'align_dims',
     'aligned_expand', 'fancy_align'
 )
@@ -37,7 +40,7 @@ def broadcast_left(*tensors: Tensor, ndim: int) -> Iterable[Tensor]:
     return (t.expand(*shape, *t.shape[ndim:]) for t in tensors)
 
 
-def broadcast_gather(input: Tensor, dim, index: LongTensor, index_ndim: int = 1, *, sparse_grad=False) -> Tensor:
+def broadcast_gather(input: Tensor, dim, index: Union[LongTensor, Tensor], index_ndim: int = 1, *, sparse_grad=False) -> Tensor:
     r"""Like `torch.gather` but more batched.
 
     .. code-block:: text
@@ -57,20 +60,41 @@ def broadcast_gather(input: Tensor, dim, index: LongTensor, index_ndim: int = 1,
     Returns
     -------
     """
-    index_shape = index.shape[-index_ndim:]
-    index = index.flatten(-index_ndim)
+    _index_dim = index.ndim-index_ndim
+    index_shape = index.shape[_index_dim:]
+    index = index.unsqueeze(-1).flatten(_index_dim)
     batch_shape = broadcast_shapes(input.shape[:dim], index.shape[:-1])
     input = input.expand(*batch_shape, *input.shape[dim:])
     index = index.expand(*batch_shape, index.shape[-1])
     return gather(input, dim, index.reshape(
-        *index.shape, *(input.ndim - index.ndim)*(1,)).expand(
+        *index.shape, *(input.ndim - index.ndim)*(1,)
+    ).expand(
         *index.shape, *input.shape[index.ndim:]
-    ) if input.ndim > index.ndim else index, sparse_grad=sparse_grad).reshape(*index.shape[:-1], *index_shape, *input.shape[dim % input.ndim + 1:])
+    ) if input.ndim > index.ndim else index, sparse_grad=sparse_grad).reshape((
+        *index.shape[:-1], *index_shape, *input.shape[dim % input.ndim + 1:]))
+
+
+def broadcast_multigather(input: Tensor, *indices: LongTensor, index_ndim=0, event_ndim=0):
+    from . import ravel_multi_index
+
+    event_pos = input.ndim - event_ndim
+    idx_start = event_pos-len(indices)
+    return broadcast_gather(
+        input.flatten(idx_start, event_pos-1),
+        idx_start-input.ndim,
+        ravel_multi_index(indices, input.shape[idx_start:event_pos]),
+        index_ndim=index_ndim
+    )
 
 
 def broadcast_cat(ts: Iterable[Tensor], dim=-1):
     r"""`torch.concatenate` but first broadcast the rest of the dimensions."""
     return cat(broadcast_except(*ts, dim=dim), dim)
+
+
+def broadcast_stack(ts: Iterable[Tensor], dim=0):
+    r"""`torch.stack` but first broadcast the tensors."""
+    return torch.stack(torch.broadcast_tensors(*ts), dim=dim)
 
 
 def insert_dims(t: Tensor, loc: int, shape: Size):
