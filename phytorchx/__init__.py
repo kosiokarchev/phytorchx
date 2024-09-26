@@ -25,6 +25,16 @@ def get_default_device():
     )
 
 
+def set_defaults(kwargs):
+    kwargs.setdefault('dtype', torch.get_default_dtype())
+    kwargs.setdefault('device', get_default_device())
+    return kwargs
+
+
+def to_tensor(arg, **kwargs):
+    return torch.as_tensor(arg).to(**set_defaults(kwargs))
+
+
 _Size = Union[Size, Iterable[int], int]
 
 
@@ -129,3 +139,7 @@ def polyval(p: Iterable[Tensor], x: Tensor) -> Tensor:
     for _p in p:
         result = _p + x * result
     return result
+
+
+def logsumnormalise(a: Tensor, dim):
+    return a - a.logsumexp(dim, keepdim=True)

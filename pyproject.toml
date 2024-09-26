@@ -39,9 +39,6 @@ include = ["phytorchx*"]
 [tool.setuptools.package-data]
 phytorchx = ["**/*.pyi"]
 
-[tool.setuptools.dynamic]
-version = {attr = "phytorchx._version.__version__"}
-
 [tool.setuptools_scm]
-write_to = "phytorchx/_version.py"
+version_file = "phytorchx/_version.py"
 version_scheme = "no-guess-dev"
