@@ -1,4 +1,5 @@
 from functools import wraps
+from io import BytesIO
 from itertools import starmap
 from operator import mul
 from typing import Iterable, Optional, Union, TypeVar
@@ -19,10 +20,20 @@ def get_default_device():
     **at the point this function is called**.
     """
     return (
-        _.device
-        if (_ := getattr(torch, '_GLOBAL_DEVICE_CONTEXT', None)) is not None
+        _() if (_ := getattr(torch, 'get_default_device', None)) is not None else
+        _.device if (_ := getattr(torch, '_GLOBAL_DEVICE_CONTEXT', None)) is not None
         else torch._C._get_default_device()
     )
+
+
+def to_device(obj, device=None):
+    if device is None:
+        device = get_default_device()
+
+    buf = BytesIO()
+    torch.save(obj, buf)
+    buf.seek(0)
+    return torch.load(buf, map_location=device, weights_only=False)
 
 
 def set_defaults(kwargs):
@@ -49,12 +60,17 @@ def load(*args, **kwargs):
     Parameters
     ----------
     map_location
-        set by default to :py:func:`get_default_device` but can still be
-        overridden.
+        set by default to :py:func:`get_default_device`
+    weights_only
+        set by default to `False`
     """
     return tree_map_(
         lambda arg: arg.to(dtype=torch.get_default_dtype()) if torch.is_tensor(arg) and torch.is_floating_point(arg) else arg,
-        torch.load(*args, **{'map_location': get_default_device(), **kwargs})
+        torch.load(*args, **{
+            'map_location': get_default_device(),
+            'weights_only': False,
+            **kwargs
+        })
     )
 
 

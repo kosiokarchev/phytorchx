@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections import UserList
 from dataclasses import dataclass, field
 from functools import singledispatchmethod
 from math import ceil
@@ -7,7 +8,7 @@ from typing import Mapping, Iterable, Union, Sequence
 import torch
 from more_itertools import one, unique_everseen
 from torch import Tensor
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, IterableDataset
 from typing_extensions import TypeAlias
 
 
@@ -15,11 +16,18 @@ _KT: TypeAlias = str
 _Tensor_like: TypeAlias = Union[Tensor, Sequence[Tensor]]
 
 
+class IndexableList(UserList):
+    def __getitem__(self, item):
+        if isinstance(item, Iterable):
+            return [self.data[i] for i in item]
+        return self.data[item]
+
+
 class AbstractTensorDataFrame(Dataset[Mapping[_KT, Tensor]], ABC):
     device = None
 
     @dataclass
-    class BatchedIterator:
+    class BatchedIterator(IterableDataset):
         df: 'AbstractTensorDataFrame'
         batch_size: int
         shuffle: bool = True
