@@ -6,7 +6,6 @@ from typing import Iterable, Optional, Union, TypeVar
 
 import torch
 from more_itertools import last
-from optree import tree_map_
 from torch import Tensor, Size, tensor
 
 from ._version import __version__, version, __version_tuple__, version_tuple
@@ -64,6 +63,7 @@ def load(*args, **kwargs):
     weights_only
         set by default to `False`
     """
+    from optree import tree_map_
     return tree_map_(
         lambda arg: arg.to(dtype=torch.get_default_dtype()) if torch.is_tensor(arg) and torch.is_floating_point(arg) else arg,
         torch.load(*args, **{

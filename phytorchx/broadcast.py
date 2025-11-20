@@ -74,14 +74,33 @@ def broadcast_gather(input: Tensor, dim, index: Union[LongTensor, Tensor], index
         *index.shape[:-1], *index_shape, *input.shape[dim % input.ndim + 1:]))
 
 
-def broadcast_multigather(input: Tensor, *indices: LongTensor, index_ndim=0, event_ndim=0):
+def broadcast_multigather(input: Tensor, *indices: LongTensor, index_ndim=1, event_ndim=0):
+    """
+
+    .. code-block:: text
+
+        input.shape:      (batch_shape..., indexed_dims..., event_shape...)
+        indices[i].shape: (batch_shape..., index_shape...)
+        out.shape:        (batch_shape..., index_shape..., event_shape...)
+
+    Parameters
+    ----------
+    input
+    indices
+    index_ndim
+    event_ndim
+
+    Returns
+    -------
+
+    """
     from . import ravel_multi_index
 
     event_pos = input.ndim - event_ndim
     idx_start = event_pos-len(indices)
+    _input = input.flatten(idx_start, event_pos-1)
     return broadcast_gather(
-        input.flatten(idx_start, event_pos-1),
-        idx_start-input.ndim,
+        _input, idx_start-_input.ndim,
         ravel_multi_index(indices, input.shape[idx_start:event_pos]),
         index_ndim=index_ndim
     )
