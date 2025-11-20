@@ -6,7 +6,7 @@ from math import ceil
 from typing import Mapping, Iterable, Union, Sequence
 
 import torch
-from more_itertools import one, unique_everseen
+from more_itertools import one, only, unique_everseen
 from torch import Tensor
 from torch.utils.data import Dataset, IterableDataset
 from typing_extensions import TypeAlias
@@ -78,14 +78,23 @@ class AbstractTensorDataFrame(Dataset[Mapping[_KT, Tensor]], ABC):
 
     __getitem__.register(list)(__getitems__)
 
+    @abstractmethod
+    def __contains__(self, item: str): ...
+
 
 @dataclass
 class TensorDataFrame(AbstractTensorDataFrame):
     data: Mapping[_KT, _Tensor_like] = field(repr=False)
 
+    _device = None
+
     @property
     def device(self):
-        return one(unique_everseen(t.device for t in self.data.values() if torch.is_tensor(t)))
+        return self._device or only(unique_everseen(t.device for t in self.data.values() if torch.is_tensor(t)))
+
+    @device.setter
+    def device(self, device: torch.device | str):
+        self._device = device
 
     def __len__(self):
         return one(unique_everseen(map(len, self.data.values())))
@@ -99,3 +108,6 @@ class TensorDataFrame(AbstractTensorDataFrame):
     def __iter__(self) -> Iterable[Mapping[_KT, Tensor]]:
         for val in zip(*self.data.values()):
             yield dict(zip(self.data.keys(), val))
+
+    def __contains__(self, item: str):
+        return item in self.data
